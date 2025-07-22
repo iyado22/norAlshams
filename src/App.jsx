@@ -1,8 +1,13 @@
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ErrorBoundary } from '@/components/ui/error-boundary';
+import { ToastProvider, useToast } from '@/components/ui/toast';
+import { LoadingSpinner } from '@/components/ui/loading-spinner';
+import { AnimatedCard } from '@/components/enhanced/AnimatedCard';
 import { 
   Moon, 
   Sun, 
@@ -15,7 +20,9 @@ import {
   List,
   AlertTriangle,
   CheckCircle,
-  X
+  X,
+  Wifi,
+  WifiOff
 } from 'lucide-react';
 
 // Import components
@@ -32,7 +39,10 @@ import TradeTable from './components/TradeTable';
 import { usePriceFeed } from './hooks/usePriceFeed';
 import { useGridTrading } from './hooks/useGridTrading';
 
-function App() {
+// Enhanced App component with performance optimizations
+const AppContent = () => {
+  const { toast } = useToast();
+  
   // Theme state
   const [isDarkMode, setIsDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -46,7 +56,8 @@ function App() {
   const [selectedSymbol, setSelectedSymbol] = useState('EUR/USD');
   const [activeTab, setActiveTab] = useState('dashboard');
   const [editingTrade, setEditingTrade] = useState(null);
-  const [notifications, setNotifications] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [connectionStatus, setConnectionStatus] = useState('connected');
 
   // Price feed hook
   const { 
@@ -101,6 +112,44 @@ function App() {
     localStorage.setItem('darkMode', isDarkMode.toString());
   }, [isDarkMode]);
 
+  // Initialize app
+  useEffect(() => {
+    const initializeApp = async () => {
+      try {
+        // Simulate initialization delay
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        setIsLoading(false);
+        toast.success('Trading system initialized successfully');
+      } catch (error) {
+        console.error('Failed to initialize app:', error);
+        toast.error('Failed to initialize trading system');
+        setIsLoading(false);
+      }
+    };
+
+    initializeApp();
+  }, [toast]);
+
+  // Monitor connection status
+  useEffect(() => {
+    const handleOnline = () => {
+      setConnectionStatus('connected');
+      toast.success('Connection restored');
+    };
+    
+    const handleOffline = () => {
+      setConnectionStatus('disconnected');
+      toast.warning('Connection lost - working offline');
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [toast]);
   // Currency pairs
   const currencyPairs = [
     { symbol: 'EUR/USD', color: 'bg-green-500' },
@@ -118,32 +167,17 @@ function App() {
   // Toggle dark mode
   const toggleDarkMode = () => {
     setIsDarkMode(!isDarkMode);
-  };
-
-  // Add notification
-  const addNotification = (message, type = 'info') => {
-    const id = Date.now();
-    setNotifications(prev => [...prev, { id, message, type, timestamp: new Date() }]);
-    
-    // Auto-remove after 5 seconds
-    setTimeout(() => {
-      setNotifications(prev => prev.filter(n => n.id !== id));
-    }, 5000);
-  };
-
-  // Remove notification
-  const removeNotification = (id) => {
-    setNotifications(prev => prev.filter(n => n.id !== id));
+    toast.info(`Switched to ${!isDarkMode ? 'dark' : 'light'} mode`);
   };
 
   // Handle manual trade operations
   const handleAddManualTrade = async (tradeData) => {
     try {
       const newTrade = addManualTrade(tradeData);
-      addNotification(`Manual ${tradeData.type} trade added at ${tradeData.entryPrice}`, 'success');
+      toast.success(`Manual ${tradeData.type} trade added at ${tradeData.entryPrice}`);
       return newTrade;
     } catch (error) {
-      addNotification(`Failed to add trade: ${error.message}`, 'error');
+      toast.error(`Failed to add trade: ${error.message}`);
       throw error;
     }
   };
@@ -151,10 +185,10 @@ function App() {
   const handleEditManualTrade = async (tradeData) => {
     try {
       editManualTrade(tradeData);
-      addNotification(`Trade ${tradeData.id} updated successfully`, 'success');
+      toast.success(`Trade ${tradeData.id} updated successfully`);
       setEditingTrade(null);
     } catch (error) {
-      addNotification(`Failed to edit trade: ${error.message}`, 'error');
+      toast.error(`Failed to edit trade: ${error.message}`);
       throw error;
     }
   };
@@ -163,12 +197,12 @@ function App() {
     try {
       const closedTrade = closeManualTrade(trade.id);
       const profit = closedTrade.profit >= 0 ? '+' : '';
-      addNotification(
-        `Trade closed: ${profit}$${closedTrade.profit.toFixed(2)}`, 
+      toast.success(
+        `Trade closed: ${profit}$${closedTrade.profit.toFixed(2)}`,
         closedTrade.profit >= 0 ? 'success' : 'error'
       );
     } catch (error) {
-      addNotification(`Failed to close trade: ${error.message}`, 'error');
+      toast.error(`Failed to close trade: ${error.message}`);
     }
   };
 
@@ -177,16 +211,50 @@ function App() {
     setActiveTab('manual');
   };
 
+  // Show loading screen
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <LoadingSpinner size="xl" />
+          <div className="space-y-2">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+              Initializing Trading System
+            </h2>
+            <p className="text-gray-600 dark:text-gray-400">
+              Setting up your trading environment...
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.5 }}
+      className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200"
+    >
       {/* Header */}
-      <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-50">
+      <motion.header 
+        initial={{ y: -100 }}
+        animate={{ y: 0 }}
+        transition={{ duration: 0.6, ease: "easeOut" }}
+        className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-50 backdrop-blur-sm bg-white/95 dark:bg-gray-800/95"
+      >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             {/* Logo and Title */}
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-2">
-                <TrendingUp className="w-8 h-8 text-blue-600" />
+                <motion.div
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                >
+                  <TrendingUp className="w-8 h-8 text-blue-600" />
+                </motion.div>
                 <div>
                   <h1 className="text-xl font-bold text-gray-900 dark:text-white">
                     Grid Trading System
@@ -196,71 +264,85 @@ function App() {
                   </p>
                 </div>
               </div>
+              
+              {/* Connection Status */}
+              <div className="flex items-center gap-2">
+                {connectionStatus === 'connected' ? (
+                  <Wifi className="w-4 h-4 text-green-600" />
+                ) : (
+                  <WifiOff className="w-4 h-4 text-red-600" />
+                )}
+                <span className={`text-xs ${
+                  connectionStatus === 'connected' ? 'text-green-600' : 'text-red-600'
+                }`}>
+                  {connectionStatus === 'connected' ? 'Online' : 'Offline'}
+                </span>
+              </div>
             </div>
 
             {/* Currency Pairs */}
             <div className="flex items-center space-x-2">
               {currencyPairs.map(pair => (
-                <Button
+                <motion.div
                   key={pair.symbol}
-                  variant={selectedSymbol === pair.symbol ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => handleSymbolChange(pair.symbol)}
-                  className="relative"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
                 >
-                  <div className={`w-2 h-2 rounded-full ${pair.color} mr-2`} />
-                  {pair.symbol}
-                </Button>
+                  <Button
+                    variant={selectedSymbol === pair.symbol ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => handleSymbolChange(pair.symbol)}
+                    className="relative"
+                  >
+                    <div className={`w-2 h-2 rounded-full ${pair.color} mr-2`} />
+                    {pair.symbol}
+                  </Button>
+                </motion.div>
               ))}
             </div>
 
             {/* Dark Mode Toggle */}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={toggleDarkMode}
-              className="ml-4"
+            <motion.div
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
             >
-              {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-            </Button>
-          </div>
-        </div>
-      </header>
-
-      {/* Notifications */}
-      {notifications.length > 0 && (
-        <div className="fixed top-20 right-4 z-50 space-y-2">
-          {notifications.map(notification => (
-            <div
-              key={notification.id}
-              className={`flex items-center gap-2 p-3 rounded-lg shadow-lg border max-w-sm ${
-                notification.type === 'success' 
-                  ? 'bg-green-50 border-green-200 text-green-800 dark:bg-green-900 dark:border-green-700 dark:text-green-200'
-                  : notification.type === 'error'
-                  ? 'bg-red-50 border-red-200 text-red-800 dark:bg-red-900 dark:border-red-700 dark:text-red-200'
-                  : 'bg-blue-50 border-blue-200 text-blue-800 dark:bg-blue-900 dark:border-blue-700 dark:text-blue-200'
-              }`}
-            >
-              {notification.type === 'success' && <CheckCircle className="w-4 h-4" />}
-              {notification.type === 'error' && <AlertTriangle className="w-4 h-4" />}
-              <span className="text-sm flex-1">{notification.message}</span>
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => removeNotification(notification.id)}
-                className="h-6 w-6 p-0"
+                onClick={toggleDarkMode}
+                className="ml-4"
               >
-                <X className="w-3 h-3" />
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={isDarkMode ? 'sun' : 'moon'}
+                    initial={{ rotate: -180, opacity: 0 }}
+                    animate={{ rotate: 0, opacity: 1 }}
+                    exit={{ rotate: 180, opacity: 0 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                  </motion.div>
+                </AnimatePresence>
               </Button>
-            </div>
-          ))}
+            </motion.div>
+          </div>
         </div>
-      )}
+      </motion.header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <motion.main 
+        initial={{ y: 20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.6, delay: 0.2 }}
+        className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6"
+      >
         {/* Price Feed */}
-        <div className="mb-6">
+        <motion.div 
+          initial={{ scale: 0.95, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ duration: 0.5, delay: 0.3 }}
+          className="mb-6"
+        >
           <PriceFeed
             symbol={selectedSymbol}
             currentPrice={currentPrice}
@@ -270,10 +352,15 @@ function App() {
             totalFloatingPnL={totalFloatingPnL}
             activeTrades={totalActiveTrades}
           />
-        </div>
+        </motion.div>
 
         {/* Trading Alerts */}
-        <div className="mb-6">
+        <motion.div 
+          initial={{ x: -20, opacity: 0 }}
+          animate={{ x: 0, opacity: 1 }}
+          transition={{ duration: 0.5, delay: 0.4 }}
+          className="mb-6"
+        >
           <TradingAlerts
             isActive={isActive}
             activeTrades={activeTrades}
@@ -281,11 +368,16 @@ function App() {
             statistics={statistics}
             currentPrice={currentPrice}
           />
-        </div>
+        </motion.div>
 
         {/* Main Trading Interface */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-6">
+        <motion.div
+          initial={{ y: 40, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ duration: 0.6, delay: 0.5 }}
+        >
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+            <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="dashboard" className="flex items-center gap-2">
               <BarChart3 className="w-4 h-4" />
               Trading Dashboard
@@ -310,32 +402,50 @@ function App() {
               <Download className="w-4 h-4" />
               Export Reports
             </TabsTrigger>
-          </TabsList>
+            </TabsList>
 
-          {/* Trading Dashboard */}
-          <TabsContent value="dashboard" className="space-y-6">
-            <GridTradingEngine
-              currentPrice={currentPrice}
-              symbol={selectedSymbol}
-              onTradeUpdate={(trade) => console.log('Trade update:', trade)}
-            />
-          </TabsContent>
+            <AnimatePresence mode="wait">
+              {/* Trading Dashboard */}
+              <TabsContent value="dashboard" className="space-y-6">
+                <motion.div
+                  key="dashboard"
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <GridTradingEngine
+                    currentPrice={currentPrice}
+                    symbol={selectedSymbol}
+                    onTradeUpdate={(trade) => console.log('Trade update:', trade)}
+                  />
+                </motion.div>
+              </TabsContent>
 
-          {/* Manual Trading */}
-          <TabsContent value="manual" className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Manual Trade Form */}
-              <ManualTradeForm
-                currentPrice={currentPrice}
-                symbol={selectedSymbol}
-                onAddTrade={handleAddManualTrade}
-                onEditTrade={handleEditManualTrade}
-                editingTrade={editingTrade}
-                isActive={isActive}
-              />
+              {/* Manual Trading */}
+              <TabsContent value="manual" className="space-y-6">
+                <motion.div
+                  key="manual"
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  transition={{ duration: 0.3 }}
+                  className="grid grid-cols-1 lg:grid-cols-2 gap-6"
+                >
+                  {/* Manual Trade Form */}
+                  <AnimatedCard delay={0.1}>
+                    <ManualTradeForm
+                      currentPrice={currentPrice}
+                      symbol={selectedSymbol}
+                      onAddTrade={handleAddManualTrade}
+                      onEditTrade={handleEditManualTrade}
+                      editingTrade={editingTrade}
+                      isActive={isActive}
+                    />
+                  </AnimatedCard>
 
-              {/* Quick Trade Summary */}
-              <Card>
+                  {/* Quick Trade Summary */}
+                  <AnimatedCard delay={0.2}>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Activity className="w-5 h-5" />
@@ -413,62 +523,101 @@ function App() {
                     </Button>
                   )}
                 </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
+                  </AnimatedCard>
+                </motion.div>
+              </TabsContent>
 
-          {/* Trade List */}
-          <TabsContent value="trades" className="space-y-6">
-            <TradeTable
-              activeTrades={activeTrades}
-              tradeHistory={tradeHistory}
-              currentPrice={currentPrice}
-              symbol={selectedSymbol}
-              onEditTrade={handleEditTrade}
-              onCloseTrade={handleCloseManualTrade}
-              showClosed={true}
-            />
-          </TabsContent>
+              {/* Trade List */}
+              <TabsContent value="trades" className="space-y-6">
+                <motion.div
+                  key="trades"
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <TradeTable
+                    activeTrades={activeTrades}
+                    tradeHistory={tradeHistory}
+                    currentPrice={currentPrice}
+                    symbol={selectedSymbol}
+                    onEditTrade={handleEditTrade}
+                    onCloseTrade={handleCloseManualTrade}
+                    showClosed={true}
+                  />
+                </motion.div>
+              </TabsContent>
 
-          {/* Simulation Controls */}
-          <TabsContent value="simulation" className="space-y-6">
-            <SimulationControls
-              isActive={isActive}
-              onStart={startTrading}
-              onStop={stopTrading}
-              onReset={resetTrading}
-              statistics={statistics}
-              activeTrades={activeTrades}
-              priceHistory={priceHistory}
-            />
-          </TabsContent>
+              {/* Simulation Controls */}
+              <TabsContent value="simulation" className="space-y-6">
+                <motion.div
+                  key="simulation"
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <SimulationControls
+                    isActive={isActive}
+                    onStart={startTrading}
+                    onStop={stopTrading}
+                    onReset={resetTrading}
+                    statistics={statistics}
+                    activeTrades={activeTrades}
+                    priceHistory={priceHistory}
+                  />
+                </motion.div>
+              </TabsContent>
 
-          {/* Configuration */}
-          <TabsContent value="configuration" className="space-y-6">
-            <TradingConfiguration
-              config={config}
-              onConfigUpdate={updateConfig}
-              currentPrice={currentPrice}
-              symbol={selectedSymbol}
-            />
-          </TabsContent>
+              {/* Configuration */}
+              <TabsContent value="configuration" className="space-y-6">
+                <motion.div
+                  key="configuration"
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <TradingConfiguration
+                    config={config}
+                    onConfigUpdate={updateConfig}
+                    currentPrice={currentPrice}
+                    symbol={selectedSymbol}
+                  />
+                </motion.div>
+              </TabsContent>
 
-          {/* Export Reports */}
-          <TabsContent value="export" className="space-y-6">
-            <ExportReports
-              activeTrades={activeTrades}
-              tradeHistory={tradeHistory}
-              priceHistory={priceHistory}
-              statistics={statistics}
-              config={config}
-              symbol={selectedSymbol}
-            />
-          </TabsContent>
-        </Tabs>
-      </main>
+              {/* Export Reports */}
+              <TabsContent value="export" className="space-y-6">
+                <motion.div
+                  key="export"
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <ExportReports
+                    activeTrades={activeTrades}
+                    tradeHistory={tradeHistory}
+                    priceHistory={priceHistory}
+                    statistics={statistics}
+                    config={config}
+                    symbol={selectedSymbol}
+                  />
+                </motion.div>
+              </TabsContent>
+            </AnimatePresence>
+          </Tabs>
+        </motion.div>
+      </motion.main>
 
       {/* Footer */}
-      <footer className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 mt-12">
+      <motion.footer 
+        initial={{ y: 50, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.6, delay: 0.8 }}
+        className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 mt-12"
+      >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="text-center text-sm text-gray-500 dark:text-gray-400">
             <p className="mb-2">
@@ -480,8 +629,19 @@ function App() {
             </p>
           </div>
         </div>
-      </footer>
-    </div>
+      </motion.footer>
+    </motion.div>
+  );
+};
+
+// Main App component with providers
+function App() {
+  return (
+    <ErrorBoundary>
+      <ToastProvider>
+        <AppContent />
+      </ToastProvider>
+    </ErrorBoundary>
   );
 }
 
