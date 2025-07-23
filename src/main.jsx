@@ -1,10 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { getCLS } from 'web-vitals/lib/getCLS'
-import { getFID } from 'web-vitals/lib/getFID'
-import { getFCP } from 'web-vitals/lib/getFCP'
-import { getLCP } from 'web-vitals/lib/getLCP'
-import { getTTFB } from 'web-vitals/lib/getTTFB'
+import { getCLS, getFID, getFCP, getLCP, getTTFB } from 'web-vitals'
 import './index.css'
 import App from './App.jsx'
 
