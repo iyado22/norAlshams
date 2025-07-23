@@ -7,6 +7,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { ToastProvider, useToast } from '@/components/ui/toast';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
+import SessionProvider from '@/components/SessionProvider';
+import { SessionStatus } from '@/components/SessionManager';
 import { AnimatedCard } from '@/components/enhanced/AnimatedCard';
 import { 
   Moon, 
@@ -276,6 +278,9 @@ const AppContent = () => {
                   connectionStatus === 'connected' ? 'text-green-600' : 'text-red-600'
                 }`}>
                   {connectionStatus === 'connected' ? 'Online' : 'Offline'}
+              
+              {/* Session Status */}
+              <SessionStatus className="ml-4" />
                 </span>
               </div>
             </div>
@@ -638,9 +643,11 @@ const AppContent = () => {
 function App() {
   return (
     <ErrorBoundary>
-      <ToastProvider>
-        <AppContent />
-      </ToastProvider>
+      <SessionProvider>
+        <ToastProvider>
+          <AppContent />
+        </ToastProvider>
+      </SessionProvider>
     </ErrorBoundary>
   );
 }

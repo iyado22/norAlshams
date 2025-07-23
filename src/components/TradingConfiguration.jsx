@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useSession } from './SessionProvider';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -18,16 +19,28 @@ const TradingConfiguration = ({
   isActive,
   onApplyConfig 
 }) => {
+  const { updateTradingConfig, tradingConfig } = useSession();
   const [localConfig, setLocalConfig] = useState(config);
   const [activeTab, setActiveTab] = useState('grid');
+
+  // Load saved configuration on mount
+  React.useEffect(() => {
+    if (tradingConfig && Object.keys(tradingConfig).length > 0) {
+      setLocalConfig({ ...config, ...tradingConfig });
+    }
+  }, [tradingConfig, config]);
 
   const handleConfigChange = (key, value) => {
     const newConfig = { ...localConfig, [key]: value };
     setLocalConfig(newConfig);
+    
+    // Auto-save to session
+    updateTradingConfig({ [key]: value });
   };
 
   const handleApply = () => {
     onConfigChange(localConfig);
+    updateTradingConfig(localConfig);
     onApplyConfig();
   };
 
@@ -86,6 +99,7 @@ const TradingConfiguration = ({
 
   const applyPreset = (preset) => {
     setLocalConfig({ ...localConfig, ...preset.config });
+    updateTradingConfig(preset.config);
   };
 
   const tabs = [

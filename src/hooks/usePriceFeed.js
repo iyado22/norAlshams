@@ -1,12 +1,21 @@
 import { useState, useEffect, useRef } from 'react';
+import { useSession } from '../components/SessionProvider';
 
 // Price feed hook for generating dummy data and real-time price updates
 export const usePriceFeed = (symbol = 'EUR/USD', initialPrice = 1.2000, useRealData = false) => {
+  const { updatePreferences, preferences } = useSession();
   const [currentPrice, setCurrentPrice] = useState(initialPrice);
   const [priceHistory, setPriceHistory] = useState([]);
   const [isConnected, setIsConnected] = useState(false);
   const [lastUpdate, setLastUpdate] = useState(null);
   const intervalRef = useRef(null);
+
+  // Load saved price feed preferences
+  useEffect(() => {
+    if (preferences.priceFeed) {
+      setCurrentPrice(preferences.priceFeed.lastPrice || initialPrice);
+    }
+  }, [preferences.priceFeed, initialPrice]);
 
   // Generate realistic price movement
   const generatePriceMovement = (currentPrice) => {
@@ -75,6 +84,15 @@ export const usePriceFeed = (symbol = 'EUR/USD', initialPrice = 1.2000, useRealD
       }
       
       setLastUpdate(timestamp);
+      
+      // Save current price to preferences
+      updatePreferences({
+        priceFeed: {
+          lastPrice: newPrice,
+          symbol,
+          lastUpdate: timestamp.toISOString()
+        }
+      });
     }, 1000); // Update every second
   };
 
@@ -93,6 +111,11 @@ export const usePriceFeed = (symbol = 'EUR/USD', initialPrice = 1.2000, useRealD
     setCurrentPrice(initialPrice);
     setPriceHistory([]);
     setLastUpdate(null);
+    
+    // Clear saved price data
+    updatePreferences({
+      priceFeed: null
+    });
   };
 
   // Cleanup on unmount
@@ -110,11 +133,21 @@ export const usePriceFeed = (symbol = 'EUR/USD', initialPrice = 1.2000, useRealD
     return () => stopFeed();
   }, []);
 
+  const switchSymbol = (newSymbol) => {
+    updatePreferences({
+      priceFeed: {
+        ...preferences.priceFeed,
+        symbol: newSymbol
+      }
+    });
+  };
+
   return {
     currentPrice,
     priceHistory,
     isConnected,
     lastUpdate,
+    switchSymbol,
     startFeed,
     stopFeed,
     resetFeed,
